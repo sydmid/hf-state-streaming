@@ -1,0 +1,53 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Real-Time Order Book";
+}
+
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <h2>Real-Time Matching Engine Demo</h2>
+            <p>Visualizing L2 Deltas and Trades via WebSocket (Binary Protocol)</p>
+            <div id="connectionStatus" class="alert alert-warning">Connecting to WebSocket...</div>
+        </div>
+    </div>
+    <div class="row">
+        <!-- Order Book Section -->
+        <div class="col-md-6">
+            <h4>Order Book (Asset ID: 1)</h4>
+            <table class="table table-sm table-dark text-center" id="orderBookTable">
+                <thead>
+                    <tr>
+                        <th class="text-danger">Ask Size</th>
+                        <th>Price</th>
+                        <th class="text-success">Bid Size</th>
+                    </tr>
+                </thead>
+                <tbody id="orderBookBody">
+                    <!-- Javascript will populate this -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Recent Trades Section -->
+        <div class="col-md-6">
+            <h4>Recent Trades</h4>
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Trade ID</th>
+                        <th>Price</th>
+                    </tr>
+                </thead>
+                <tbody id="tradesBody">
+                    <!-- Javascript will populate this -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/marketData.js" asp-append-version="true"></script>
+}

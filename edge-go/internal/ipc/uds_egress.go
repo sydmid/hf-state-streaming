@@ -121,7 +121,7 @@ func (eb *EgressBroadcaster) handleEgressStream(conn net.Conn) {
 		broadcaster := gws.NewBroadcaster(gws.OpcodeBinary, fullFrame)
 		eb.subscribers.Range(func(key, value any) bool {
 			if clientConn, ok := key.(*gws.Conn); ok {
-				_ = broadcaster.Broadcast(clientConn)
+				_ = broadcaster.Broadcast(clientConn, nil)
 			}
 			return true
 		})

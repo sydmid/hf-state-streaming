@@ -9,9 +9,12 @@
 
 A production-grade, ultra-low-latency state streaming and order matching engine designed for financial trading systems and high-throughput game economies. 
 
+![Demo Screenshot](docs/assets/demo_screenshot.png)
+
 The architecture decouples the network boundary from core deterministic state execution across two local processes connected via Unix Domain Sockets:
 1. **Edge Ingestion & Egress Service (Go 1.22+)**: Leverages [`github.com/lxzan/gws`](https://github.com/lxzan/gws) with zero-allocation `NextReader()` streaming, sequential per-socket event dispatching (`ParallelEnabled: false`), and vectorized single-compression market broadcast (`gws.Broadcaster`).
 2. **Core Matching Engine (.NET 9 / C#)**: A headless, Native-AOT-ready daemon consuming IPC frames via `System.IO.Pipelines`, arbitrating events across an LMAX Disruptor-inspired lock-free cache-line aligned SPSC ring buffer, and maintaining an unmanaged price-time priority Limit Order Book with **0 Gen 0/1/2 GC allocations** during active matching.
+3. **Real-time Trading Demo (ASP.NET Razor Pages UI)**: A `.NET` powered web application serving a real-time order book dashboard and a high-frequency trading bot that submits binary order frames over WebSockets.
 
 ---
 
@@ -119,43 +122,6 @@ To prevent serialization overhead and data translation bottlenecks, all communic
 
 ---
 
-## Repository Layout
-
-```
-hf-state-streaming/
-├── proto/
-│   ├── messages.h              # C/C++ packed protocol structs & static assertions
-│   ├── messages.go             # Go zero-copy struct casting & header encoding
-│   ├── Messages.cs             # C# [StructLayout(LayoutKind.Sequential, Pack = 1)]
-│   └── test_layout.c           # Protocol verification test harness
-├── edge-go/
-│   ├── cmd/server/main.go      # Go edge gateway entrypoint
-│   ├── internal/gateway/       # gws NextReader reader loop & pool management
-│   ├── internal/ipc/           # Non-blocking UDS client & egress broadcaster
-│   ├── internal/client/        # High-throughput load & latency benchmark client
-│   └── go.mod
-├── engine-dotnet/
-│   ├── src/Engine.Core/
-│   │   ├── Matching/           # Zero-alloc Limit Order Book & OrderMemoryPool
-│   │   ├── Disruptor/          # Cache-line padded SPSC RingBuffer
-│   │   ├── Ipc/                # System.IO.Pipelines UdsServer & EgressWriter
-│   │   ├── Protocol/           # Zero-copy ReadOnlySequence FrameParser
-│   │   ├── Program.cs          # Native AOT daemon entrypoint
-│   │   └── Engine.Core.csproj
-│   ├── benchmarks/             # BenchmarkDotNet allocation & throughput suite
-│   ├── tests/                  # xUnit unit test suite (Price-time, IOC, PostOnly)
-│   └── Engine.sln
-├── scripts/
-│   ├── setup_uds.sh            # IPC socket setup & cleanup script
-│   ├── run_benchmark.sh        # Multi-tier automated benchmark runner
-│   ├── profile_latency.sh      # Latency percentile & jitter profiler
-│   └── simulate_e2e.py         # Nanosecond-resolution UDS end-to-end profiler
-├── Makefile                    # Unified build, test, and benchmark targets
-└── README.md
-```
-
----
-
 ## Quick Start & Verification
 
 ### Prerequisites
@@ -168,33 +134,33 @@ hf-state-streaming/
 ```bash
 make test-proto
 ```
-Compiles and executes `proto/test_layout.c` using compile-time `static_assert` to verify byte offsets, struct alignment, and size guarantees across C, Go, and C#.
 
 ### 2. Configure IPC Sockets
 ```bash
 make setup-uds
 ```
-Prepares `/tmp/engine_ingress.sock` and `/tmp/engine_egress.sock`.
 
-### 3. Run .NET Unit Tests & Benchmarks
+### 3. Build & Run
+First, start the Edge Gateway:
 ```bash
-# Run xUnit matching engine tests (price-time priority, FIFO queue, IOC, PostOnly)
-make test-dotnet
-
-# Run BenchmarkDotNet suite to verify 0 B GC allocation
-make benchmark-dotnet
+cd edge-go
+go build -o server ./cmd/server
+./server
 ```
 
-### 4. Build .NET Core Engine with Native AOT
+Second, start the Native AOT Matching Engine (in a new terminal):
 ```bash
-make build-dotnet-aot
+cd engine-dotnet/src/Engine.Core
+dotnet publish -c Release -r linux-x64 --self-contained
+./bin/Release/net9.0/linux-x64/publish/Engine.Core
 ```
 
-### 5. Run End-to-End Latency & Jitter Benchmark
+Finally, start the real-time demo UI and traffic generator (in a new terminal):
 ```bash
-# Runs 100,000 orders at sustained 100,000 orders/sec rate over real UDS sockets
-make benchmark-e2e
+cd engine-dotnet/src/Demo.WebUi
+dotnet run
 ```
+Navigate to the UI to watch the order book and trades populate at 100,000s orders per second.
 
 ---
 

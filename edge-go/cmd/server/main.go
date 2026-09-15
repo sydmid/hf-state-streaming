@@ -41,15 +41,15 @@ func main() {
 	log.Printf("[edge-go] Egress broadcaster listening on UDS: %s", *egressSock)
 
 	handler := gateway.NewGatewayHandler(ipcClient, egressBroadcaster)
-	server := gws.NewServer(handler, &gws.ServerOption{
+	upgrader := gws.NewUpgrader(handler, &gws.ServerOption{
 		ParallelEnabled: false,
-		Recovery:        gws.BuiltinRecovery,
+		Recovery:        gws.Recovery,
 		ReadBufferSize:  65536,
 		WriteBufferSize: 65536,
 	})
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		socket, err := server.Upgrade(w, r)
+		socket, err := upgrader.Upgrade(w, r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

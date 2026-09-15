@@ -1,8 +1,6 @@
 package gateway
 
 import (
-	"errors"
-	"io"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -64,41 +62,25 @@ func (h *GatewayHandler) OnPing(socket *gws.Conn, payload []byte) {
 	_ = socket.WritePong(payload)
 }
 
-func (h *GatewayHandler) runCustomReader(socket *gws.Conn) {
-	bufPtr := h.chunkPool.Get().(*[]byte)
-	buf := *bufPtr
-	defer h.chunkPool.Put(bufPtr)
+func (h *GatewayHandler) OnMessage(socket *gws.Conn, message *gws.Message) {
+	defer message.Close()
+	if message.Opcode != gws.OpcodeBinary {
+		return
+	}
 
-	for {
-		opcode, reader, err := socket.NextReader()
-		if err != nil {
-			return
-		}
+	buf := message.Bytes()
+	if len(buf) > 0 {
+		atomic.AddUint64(&h.inboundBytes, uint64(len(buf)))
+		atomic.AddUint64(&h.inboundFrames, 1)
 
-		if opcode != gws.OpcodeBinary {
-			_, _ = io.CopyBuffer(io.Discard, reader, buf)
-			continue
-		}
-
-		for {
-			n, rErr := reader.Read(buf)
-			if n > 0 {
-				atomic.AddUint64(&h.inboundBytes, uint64(n))
-				atomic.AddUint64(&h.inboundFrames, 1)
-
-				if err := h.ipcClient.ForwardFrame(buf[:n]); err != nil {
-					atomic.AddUint64(&h.dropCount, 1)
-				}
-			}
-
-			if rErr != nil {
-				if errors.Is(rErr, io.EOF) {
-					break
-				}
-				return
-			}
+		if err := h.ipcClient.ForwardFrame(buf); err != nil {
+			atomic.AddUint64(&h.dropCount, 1)
 		}
 	}
+}
+
+func (h *GatewayHandler) runCustomReader(socket *gws.Conn) {
+	// Replaced by OnMessage for newer gws versions
 }
 
 func (h *GatewayHandler) Stats() (int64, uint64, uint64, uint64) {
