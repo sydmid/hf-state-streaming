@@ -1,0 +1,25 @@
+# Build outputs
+bin/
+obj/
+*.exe
+*.dll
+*.so
+*.dylib
+*.aot
+BenchmarkDotNet.Artifacts/
+
+# Sockets and temporary artifacts
+/tmp/engine_ingress.sock
+/tmp/engine_egress.sock
+*.sock
+
+# Go build & test artifacts
+*.test
+*.out
+proto/test_layout
+
+# OS & Editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
