@@ -80,16 +80,9 @@ namespace HfEngine.Ipc
                         ReadResult result = await pipeReader.ReadAsync(ct).ConfigureAwait(false);
                         ReadOnlySequence<byte> buffer = result.Buffer;
 
-                        while (FrameParser.TryReadFrame(ref buffer, out InboundFrame frame))
-                        {
-                            while (!_ringBuffer.TryEnqueue(in frame))
-                            {
-                                Thread.SpinWait(10);
-                            }
-                            TotalFramesEnqueued++;
-                        }
+                        SequencePosition position = ParseFrames(buffer);
 
-                        pipeReader.AdvanceTo(buffer.Start, buffer.End);
+                        pipeReader.AdvanceTo(position, buffer.End);
 
                         if (result.IsCompleted || result.IsCanceled)
                         {
@@ -105,6 +98,22 @@ namespace HfEngine.Ipc
                     await pipeReader.CompleteAsync().ConfigureAwait(false);
                 }
             }
+        }
+
+        private SequencePosition ParseFrames(ReadOnlySequence<byte> buffer)
+        {
+            var reader = new SequenceReader<byte>(buffer);
+
+            while (FrameParser.TryReadFrame(ref reader, out InboundFrame frame))
+            {
+                while (!_ringBuffer.TryEnqueue(in frame))
+                {
+                    Thread.SpinWait(10);
+                }
+                TotalFramesEnqueued++;
+            }
+
+            return reader.Position;
         }
 
         public void Dispose()

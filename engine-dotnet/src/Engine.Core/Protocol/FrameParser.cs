@@ -30,85 +30,85 @@ namespace HfEngine.Protocol
     public static class FrameParser
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static unsafe bool TryReadFrame(ref ReadOnlySequence<byte> buffer, out InboundFrame frame)
+        public static unsafe bool TryReadFrame(ref SequenceReader<byte> reader, out InboundFrame frame)
         {
-            if (buffer.Length < ProtocolConstants.FrameHeaderSize)
+            if (reader.Remaining < ProtocolConstants.FrameHeaderSize)
             {
                 Unsafe.SkipInit(out frame);
                 return false;
             }
 
+            ReadOnlySpan<byte> unread = reader.UnreadSpan;
             FrameHeader header;
-            if (buffer.FirstSpan.Length >= ProtocolConstants.FrameHeaderSize)
+            if (unread.Length >= ProtocolConstants.FrameHeaderSize)
             {
-                header = Unsafe.ReadUnaligned<FrameHeader>(ref MemoryMarshal.GetReference(buffer.FirstSpan));
+                header = Unsafe.ReadUnaligned<FrameHeader>(ref MemoryMarshal.GetReference(unread));
             }
             else
             {
                 Span<byte> headerBytes = stackalloc byte[ProtocolConstants.FrameHeaderSize];
-                buffer.Slice(0, ProtocolConstants.FrameHeaderSize).CopyTo(headerBytes);
+                reader.TryCopyTo(headerBytes);
                 header = Unsafe.ReadUnaligned<FrameHeader>(ref MemoryMarshal.GetReference(headerBytes));
             }
 
             if (!header.IsValid)
             {
-                buffer = buffer.Slice(1);
+                reader.Advance(1);
                 Unsafe.SkipInit(out frame);
                 return false;
             }
 
             int totalFrameLength = ProtocolConstants.FrameHeaderSize + header.PayloadLen;
-            if (buffer.Length < totalFrameLength)
+            if (reader.Remaining < totalFrameLength)
             {
                 Unsafe.SkipInit(out frame);
                 return false;
             }
 
+            reader.Advance(ProtocolConstants.FrameHeaderSize);
+
             if (header.MsgType == ProtocolConstants.MsgTypeNewOrder)
             {
-                if (buffer.FirstSpan.Length >= totalFrameLength)
+                NewOrderPayload payload;
+                if (reader.UnreadSpan.Length >= ProtocolConstants.NewOrderPayloadSize)
                 {
-                    ref byte baseRef = ref MemoryMarshal.GetReference(buffer.FirstSpan);
-                    ref byte payloadRef = ref Unsafe.Add(ref baseRef, ProtocolConstants.FrameHeaderSize);
-                    NewOrderPayload payload = Unsafe.ReadUnaligned<NewOrderPayload>(ref payloadRef);
-                    frame = new InboundFrame(header, payload.OrderId, payload.PlayerOrTraderId, payload.Price, payload.Quantity, payload.AssetId);
+                    payload = Unsafe.ReadUnaligned<NewOrderPayload>(ref MemoryMarshal.GetReference(reader.UnreadSpan));
+                    reader.Advance(ProtocolConstants.NewOrderPayloadSize);
                 }
                 else
                 {
-                    Span<byte> fullBytes = stackalloc byte[40];
-                    buffer.Slice(0, totalFrameLength).CopyTo(fullBytes);
-                    ref byte payloadRef = ref fullBytes[ProtocolConstants.FrameHeaderSize];
-                    NewOrderPayload payload = Unsafe.ReadUnaligned<NewOrderPayload>(ref payloadRef);
-                    frame = new InboundFrame(header, payload.OrderId, payload.PlayerOrTraderId, payload.Price, payload.Quantity, payload.AssetId);
+                    Span<byte> payloadBytes = stackalloc byte[ProtocolConstants.NewOrderPayloadSize];
+                    reader.TryCopyTo(payloadBytes);
+                    payload = Unsafe.ReadUnaligned<NewOrderPayload>(ref MemoryMarshal.GetReference(payloadBytes));
+                    reader.Advance(ProtocolConstants.NewOrderPayloadSize);
                 }
+                frame = new InboundFrame(header, payload.OrderId, payload.PlayerOrTraderId, payload.Price, payload.Quantity, payload.AssetId);
+                return true;
             }
             else if (header.MsgType == ProtocolConstants.MsgTypeCancelOrder)
             {
-                if (buffer.FirstSpan.Length >= totalFrameLength)
+                CancelOrderPayload payload;
+                if (reader.UnreadSpan.Length >= ProtocolConstants.CancelOrderPayloadSize)
                 {
-                    ref byte baseRef = ref MemoryMarshal.GetReference(buffer.FirstSpan);
-                    ref byte payloadRef = ref Unsafe.Add(ref baseRef, ProtocolConstants.FrameHeaderSize);
-                    CancelOrderPayload payload = Unsafe.ReadUnaligned<CancelOrderPayload>(ref payloadRef);
-                    frame = new InboundFrame(header, payload.OrderId, payload.PlayerOrTraderId, 0, 0, 0);
+                    payload = Unsafe.ReadUnaligned<CancelOrderPayload>(ref MemoryMarshal.GetReference(reader.UnreadSpan));
+                    reader.Advance(ProtocolConstants.CancelOrderPayloadSize);
                 }
                 else
                 {
-                    Span<byte> fullBytes = stackalloc byte[24];
-                    buffer.Slice(0, totalFrameLength).CopyTo(fullBytes);
-                    ref byte payloadRef = ref fullBytes[ProtocolConstants.FrameHeaderSize];
-                    CancelOrderPayload payload = Unsafe.ReadUnaligned<CancelOrderPayload>(ref payloadRef);
-                    frame = new InboundFrame(header, payload.OrderId, payload.PlayerOrTraderId, 0, 0, 0);
+                    Span<byte> payloadBytes = stackalloc byte[ProtocolConstants.CancelOrderPayloadSize];
+                    reader.TryCopyTo(payloadBytes);
+                    payload = Unsafe.ReadUnaligned<CancelOrderPayload>(ref MemoryMarshal.GetReference(payloadBytes));
+                    reader.Advance(ProtocolConstants.CancelOrderPayloadSize);
                 }
+                frame = new InboundFrame(header, payload.OrderId, payload.PlayerOrTraderId, 0, 0, 0);
+                return true;
             }
             else
             {
                 Unsafe.SkipInit(out frame);
-                buffer = buffer.Slice(totalFrameLength);
+                reader.Advance(header.PayloadLen);
                 return false;
             }
-
-            buffer = buffer.Slice(totalFrameLength);
-            return true;
         }
     }
 }
