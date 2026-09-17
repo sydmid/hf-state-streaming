@@ -7,7 +7,7 @@ using HfEngine.Protocol;
 namespace HfEngine.Benchmarks
 {
     [MemoryDiagnoser]
-    [SimpleJob(RuntimeMoniker.Net90)]
+    [SimpleJob(RuntimeMoniker.Net80)]
     public class ParserBenchmarks
     {
         private byte[] _rawBytes = null!;
@@ -37,8 +37,9 @@ namespace HfEngine.Benchmarks
         public int ParseFrames_ZeroAlloc()
         {
             var seq = _sequence;
+            var reader = new SequenceReader<byte>(seq);
             int count = 0;
-            while (FrameParser.TryReadFrame(ref seq, out InboundFrame frame))
+            while (FrameParser.TryReadFrame(ref reader, out InboundFrame frame))
             {
                 count++;
             }

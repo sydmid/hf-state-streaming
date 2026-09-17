@@ -14,7 +14,7 @@ namespace HfEngine.Benchmarks
     }
 
     [MemoryDiagnoser]
-    [SimpleJob(RuntimeMoniker.Net90)]
+    [SimpleJob(RuntimeMoniker.Net80)]
     public class MatchingBenchmarks
     {
         private OrderMemoryPool _pool = null!;
